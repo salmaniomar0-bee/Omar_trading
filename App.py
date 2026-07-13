@@ -6,7 +6,7 @@ from PIL import Image
 # ----------------------------------------------------------------------------
 # PAGE CONFIG & STYLING
 # ----------------------------------------------------------------------------
-st.set_page_config(page_title="REDA System - Multi-Timeframe Dashboard", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="OMAR System - Multi-Timeframe Dashboard", layout="wide", page_icon="⚡")
 
 st.markdown("""
 <style>
