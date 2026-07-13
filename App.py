@@ -559,4 +559,12 @@ with tab_entry:
                 window, [p for p in e_entry_highs if p[0] in window.index],
                 [p for p in e_entry_lows if p[0] in window.index],
                 f"{e_symbol} · {e_entry_tf}", obs=e_obs, fvgs=e_fvgs, height=460
+
             ), use_container_width=True)
+TF_CONFIG = {
+    "Daily": dict(interval="1d", period="2y", resample=None),
+    "4H":    dict(interval="1h", period="180d", resample="4h"),
+    "1H":    dict(interval="1h", period="180d", resample=None),
+    "30M":   dict(interval="30m", period="60d", resample=None),
+    "1M":    dict(interval="1m", period="1d", resample=None), # <--- زِد هاد السطر هنا
+}
