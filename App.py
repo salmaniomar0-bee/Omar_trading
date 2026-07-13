@@ -109,7 +109,7 @@ def analyze_poi_zones(pil_img):
 # ----------------------------------------------------------------------------
 st.markdown("""
 <div class="header-box">
-    <div class="header-title">⚡ REDA Smart Trading System (SMC)</div>
+    <div class="header-title">⚡ OMAR Smart Trading System (SMC)</div>
     <div class="header-sub">Mechanical Analysis Dashboard: 1D Bias ➔ 1H Liquidity ➔ POI Discovery ➔ Execution</div>
 </div>
 """, unsafe_allow_html=True)
