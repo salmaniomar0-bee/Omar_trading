@@ -8,8 +8,35 @@ from datetime import datetime
 # ----------------------------------------------------------------------------
 # PAGE CONFIG
 # ----------------------------------------------------------------------------
-st.set_page_config(page_title="SMC Live Dashboard", layout="wide")
+st.set_page_config(page_title="SMC Live Dashboard", layout="wide", page_icon="📊")
 DEFAULT_SYMBOLS = ["BTC-USD", "ETH-USD", "EURUSD=X", "GBPUSD=X", "XAUUSD=X"]
+
+# ----------------------------------------------------------------------------
+# STYLING
+# ----------------------------------------------------------------------------
+st.markdown("""
+<style>
+    .block-container {padding-top: 1.5rem;}
+    .bias-card {
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin-bottom: 10px;
+        font-size: 15px;
+        line-height: 1.5;
+    }
+    .bias-bull {background: rgba(46,204,113,0.12); border: 1px solid rgba(46,204,113,0.45);}
+    .bias-bear {background: rgba(231,76,60,0.12); border: 1px solid rgba(231,76,60,0.45);}
+    .bias-neutral {background: rgba(149,165,166,0.12); border: 1px solid rgba(149,165,166,0.45);}
+    .bias-title {font-weight: 700; font-size: 17px; margin-bottom: 4px;}
+    .badge {
+        display: inline-block; padding: 3px 10px; border-radius: 20px;
+        font-weight: 700; font-size: 13px; margin-left: 6px;
+    }
+    .badge-buy {background:#1e8449; color:white;}
+    .badge-sell {background:#c0392b; color:white;}
+    .badge-neutral {background:#7f8c8d; color:white;}
+</style>
+""", unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------------
 # DATA FETCHING
@@ -90,15 +117,45 @@ def build_bias(daily_bias: str, h4_bias: str):
         return "NEUTRAL", "Low (No clear higher-timeframe trend)"
 
 
+def explain_bias(symbol, daily_structure, daily_bias, h4_structure, h4_bias,
+                  overall_bias, confidence, d_highs, d_lows, h_highs, h_lows):
+    """Builds a human-readable explanation of WHY the bias is what it is."""
+
+    def swing_line(highs, lows, label):
+        if len(highs) < 2 or len(lows) < 2:
+            return f"Not enough swing points yet on the {label} to confirm structure."
+        lh_date, lh_price = highs[-1]
+        ph_date, ph_price = highs[-2]
+        ll_date, ll_price = lows[-1]
+        pl_date, pl_price = lows[-2]
+        high_move = "higher high" if lh_price > ph_price else "lower high"
+        low_move = "higher low" if ll_price > pl_price else "lower low"
+        return (f"On {label}: last swing high {lh_price:.4f} on {lh_date.date()} vs "
+                f"previous {ph_price:.4f} → **{high_move}**. "
+                f"Last swing low {ll_price:.4f} on {ll_date.date()} vs "
+                f"previous {pl_price:.4f} → **{low_move}**.")
+
+    daily_line = swing_line(d_highs, d_lows, "Daily")
+    h4_line = swing_line(h_highs, h_lows, "4H")
+
+    if overall_bias == "BUY":
+        verdict = (f"**{symbol} is BULLISH.** Price is printing higher highs and higher lows, "
+                   f"which means buyers are in control and the path of least resistance is up.")
+    elif overall_bias == "SELL":
+        verdict = (f"**{symbol} is BEARISH.** Price is printing lower highs and lower lows, "
+                   f"which means sellers are in control and the path of least resistance is down.")
+    else:
+        verdict = (f"**{symbol} has NO CLEAR BIAS right now.** Daily and 4H structure disagree "
+                   f"or the market is ranging — better to wait for a clean break of structure "
+                   f"before taking a directional trade.")
+
+    return f"{verdict}\n\n{daily_line}\n\n{h4_line}\n\n**Confidence:** {confidence}"
+
+
 # ----------------------------------------------------------------------------
 # STEP 2: POI DETECTION — ORDER BLOCKS (OB) & FAIR VALUE GAPS (FVG)
 # ----------------------------------------------------------------------------
 def find_fvgs(df: pd.DataFrame):
-    """
-    3-candle Fair Value Gap detection.
-    Bullish FVG: Low[i] > High[i-2]   -> gap between candle i-2's high and candle i's low
-    Bearish FVG: High[i] < Low[i-2]   -> gap between candle i-2's low and candle i's high
-    """
     fvgs = []
     highs = df["High"].values
     lows = df["Low"].values
@@ -118,13 +175,6 @@ def find_fvgs(df: pd.DataFrame):
 
 
 def find_order_blocks(df: pd.DataFrame, swing_highs, swing_lows):
-    """
-    Simplified Order Block detection anchored to a Break of Structure (BOS):
-    - Bullish OB: the last down-close candle before a candle that closes
-      above the most recent prior swing high.
-    - Bearish OB: the last up-close candle before a candle that closes
-      below the most recent prior swing low.
-    """
     obs = []
     opens = df["Open"].values
     closes = df["Close"].values
@@ -168,11 +218,6 @@ def find_order_blocks(df: pd.DataFrame, swing_highs, swing_lows):
 # STEP 3: ENTRY, STOP LOSS & TAKE PROFIT
 # ----------------------------------------------------------------------------
 def generate_trade_setup(h4_df, h4_highs, h4_lows, h4_obs, h4_fvgs, overall_bias, symbol):
-    """
-    Builds an entry setup on the 4H timeframe in the direction of the overall bias,
-    using the most recent matching Order Block (preferred) or Fair Value Gap as the
-    Point of Interest (POI) / entry zone.
-    """
     if overall_bias not in ("BUY", "SELL") or h4_df.empty:
         return None
 
@@ -232,7 +277,8 @@ def make_chart(df: pd.DataFrame, swing_highs, swing_lows, title: str,
                 obs=None, fvgs=None, trade_setup=None):
     fig = go.Figure()
     fig.add_trace(go.Candlestick(
-        x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name=title
+        x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name=title,
+        increasing_line_color="#26a69a", decreasing_line_color="#ef5350"
     ))
 
     if swing_highs:
@@ -246,7 +292,6 @@ def make_chart(df: pd.DataFrame, swing_highs, swing_lows, title: str,
 
     x_end = df.index[-1]
 
-    # Order Blocks
     if obs:
         for ob in obs:
             if ob["time"] < df.index[0]:
@@ -255,7 +300,6 @@ def make_chart(df: pd.DataFrame, swing_highs, swing_lows, title: str,
             fig.add_shape(type="rect", x0=ob["time"], x1=x_end, y0=ob["bottom"], y1=ob["top"],
                           fillcolor=color, line=dict(width=0), layer="below")
 
-    # Fair Value Gaps
     if fvgs:
         for fvg in fvgs:
             if fvg["start"] < df.index[0]:
@@ -264,7 +308,6 @@ def make_chart(df: pd.DataFrame, swing_highs, swing_lows, title: str,
             fig.add_shape(type="rect", x0=fvg["start"], x1=x_end, y0=fvg["bottom"], y1=fvg["top"],
                           fillcolor=color, line=dict(width=0), layer="below")
 
-    # Entry / SL / TP lines
     if trade_setup:
         fig.add_hline(y=trade_setup["Entry"], line=dict(color="yellow", width=1.5, dash="dash"),
                       annotation_text="Entry", annotation_position="right")
@@ -275,7 +318,8 @@ def make_chart(df: pd.DataFrame, swing_highs, swing_lows, title: str,
 
     fig.update_layout(title=title, height=460, xaxis_rangeslider_visible=False,
                        margin=dict(l=10, r=10, t=40, b=10),
-                       legend=dict(orientation="h", yanchor="bottom", y=1.02))
+                       legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                       template="plotly_dark")
     return fig
 
 
@@ -283,6 +327,7 @@ def make_chart(df: pd.DataFrame, swing_highs, swing_lows, title: str,
 # UI
 # ----------------------------------------------------------------------------
 st.title("📊 Smart Money Concepts — Live Structure, POI & Entry Dashboard")
+st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')} · Auto-refreshes data every 5 min")
 
 with st.sidebar:
     st.header("Settings")
@@ -306,7 +351,7 @@ summary_rows = []
 trade_setups = []
 
 for symbol in symbols:
-    st.markdown(f"## {symbol}")
+    st.markdown("---")
     daily_df = fetch_daily(symbol)
     h4_df = fetch_4h(symbol)
     if daily_df.empty or h4_df.empty:
@@ -333,10 +378,20 @@ for symbol in symbols:
         "Active Setup": "Yes" if trade_setup else "No"
     })
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Daily Bias", daily_bias)
-    col2.metric("4H Bias", h4_bias)
-    col3.metric("Overall Bias", overall_bias)
+    badge_class = {"BUY": "badge-buy", "SELL": "badge-sell", "NEUTRAL": "badge-neutral"}[overall_bias]
+    card_class = {"BUY": "bias-bull", "SELL": "bias-bear", "NEUTRAL": "bias-neutral"}[overall_bias]
+    current_price = float(h4_df["Close"].iloc[-1])
+
+    st.markdown(
+        f'<div class="bias-title">{symbol} '
+        f'<span class="badge {badge_class}">{overall_bias}</span> '
+        f'<span style="font-weight:400;font-size:14px;color:#aaa;">· price {current_price:.4f}</span></div>',
+        unsafe_allow_html=True
+    )
+
+    explanation = explain_bias(symbol, daily_structure, daily_bias, h4_structure, h4_bias,
+                                overall_bias, confidence, d_highs, d_lows, h_highs, h_lows)
+    st.markdown(f'<div class="bias-card {card_class}">{explanation}</div>', unsafe_allow_html=True)
 
     chart_col1, chart_col2 = st.columns(2)
     with chart_col1:
@@ -368,7 +423,7 @@ for symbol in symbols:
         st.caption("No valid POI-based entry setup found for the current bias.")
 
 if summary_rows:
-    st.markdown("## 🧭 Summary")
+    st.markdown("## 🧭 Summary — All Symbols")
     st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
 
 if trade_setups:
