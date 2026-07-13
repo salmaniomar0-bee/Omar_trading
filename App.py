@@ -8,6 +8,7 @@ from PIL import Image
 # ----------------------------------------------------------------------------
 st.set_page_config(page_title="OMAR System - Multi-Timeframe Dashboard", layout="wide", page_icon="⚡")
 
+
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght=400;600;800&family=JetBrains+Mono:wght=500;700&display=swap');
